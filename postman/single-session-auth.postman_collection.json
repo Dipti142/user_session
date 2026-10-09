@@ -1,0 +1,168 @@
+{
+  "info": {
+    "name": "Single-session Auth API",
+    "description": "Register and verify that a second login invalidates the first device session.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "name", "value": "Test User" },
+    { "key": "email", "value": "test@example.com" },
+    { "key": "password", "value": "StrongPass123!" },
+    { "key": "laptopAToken", "value": "" },
+    { "key": "laptopBToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Register",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{name}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/auth/register"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('Registration succeeds or account already exists', function () {",
+            "  pm.expect([201, 409]).to.include(pm.response.code);",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "Laptop A Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/auth/login"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('Laptop A login succeeds', function () { pm.response.to.have.status(200); });",
+            "const cookie = pm.response.headers.get('Set-Cookie') || '';",
+            "const match = cookie.match(/(?:^|,\\s*)session_token=([^;]+)/);",
+            "pm.test('Laptop A session cookie is returned', function () { pm.expect(match).to.not.equal(null); });",
+            "if (match) pm.collectionVariables.set('laptopAToken', match[1]);"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "Laptop A Me",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Cookie", "value": "session_token={{laptopAToken}}" }],
+        "url": "{{baseUrl}}/api/auth/me"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": ["pm.test('Laptop A is authenticated', function () { pm.response.to.have.status(200); });"]
+        }
+      }]
+    },
+    {
+      "name": "Laptop B Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/auth/login"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('Laptop B login succeeds', function () { pm.response.to.have.status(200); });",
+            "const cookie = pm.response.headers.get('Set-Cookie') || '';",
+            "const match = cookie.match(/(?:^|,\\s*)session_token=([^;]+)/);",
+            "pm.test('Laptop B session cookie is returned', function () { pm.expect(match).to.not.equal(null); });",
+            "if (match) pm.collectionVariables.set('laptopBToken', match[1]);"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "Laptop A Me (must be unauthorized)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Cookie", "value": "session_token={{laptopAToken}}" }],
+        "url": "{{baseUrl}}/api/auth/me"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": ["pm.test('Laptop A session was replaced', function () { pm.response.to.have.status(401); });"]
+        }
+      }]
+    },
+    {
+      "name": "Laptop B Me",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Cookie", "value": "session_token={{laptopBToken}}" }],
+        "url": "{{baseUrl}}/api/auth/me"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": ["pm.test('Laptop B remains authenticated', function () { pm.response.to.have.status(200); });"]
+        }
+      }]
+    },
+    {
+      "name": "Laptop B Logout",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Cookie", "value": "session_token={{laptopBToken}}" }],
+        "url": "{{baseUrl}}/api/auth/logout"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": ["pm.test('Logout succeeds', function () { pm.response.to.have.status(200); });"]
+        }
+      }]
+    },
+    {
+      "name": "Laptop B Me (after logout, must be unauthorized)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Cookie", "value": "session_token={{laptopBToken}}" }],
+        "url": "{{baseUrl}}/api/auth/me"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": ["pm.test('Logged-out session is rejected', function () { pm.response.to.have.status(401); });"]
+        }
+      }]
+    }
+  ]
+}
